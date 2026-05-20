@@ -1,0 +1,83 @@
+services:
+  traefik:
+    image: traefik:3.7.0
+    # release info https://github.com/traefik/traefik/releases
+    container_name: traefik
+    depends_on:
+    - traefik-certs-dumper
+    - socket-proxy
+    restart: unless-stopped
+    user: "1001:988"
+    group_add:
+    - "104"  # syslog group for /var/log write access
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      socket-proxy:
+      traefik-certs-dumper-backend:
+      teleport-backend:
+    ports:
+    - 80:80
+    - 443:443
+    - 25:25
+    - 465:465
+    - 993:993
+    - 4190:4190
+    - 25565:25565
+    - 3024:3024
+    environment:
+    - TZ=${TZ:-Europe/Oslo}
+    volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - ./traefik/config/traefik.yml:/traefik.yml:ro
+    - ./traefik/config:/config:ro
+    - ./traefik/acme:/acme
+    - /var/log/traefik.log:/var/log/traefik.log
+    - /var/log/traefik-access.log:/var/log/traefik-access.log
+    - ./traefik/plugins:/plugins-storage
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.traefik.entrypoints=http
+    - traefik.http.routers.traefik.rule=Host(`traefik.tromsocup.no`)
+    - traefik.http.routers.traefik.middlewares=https-redirect@file
+    - traefik.http.routers.traefik-secure.entrypoints=https
+    - traefik.http.routers.traefik-secure.rule=Host(`traefik.tromsocup.no`)
+    - traefik.http.routers.traefik-secure.tls=true
+    - traefik.http.routers.traefik-secure.service=traefik-dashboard-svc@file
+
+  teleport:
+    image: public.ecr.aws/gravitational/teleport-distroless:18
+    # release info https://github.com/gravitational/teleport/releases
+    container_name: teleport
+    restart: unless-stopped
+    networks:
+      teleport-backend:
+    volumes:
+    - ./teleport/config/teleport.yaml:/etc/teleport/teleport.yaml:ro
+    - ./teleport/config/oidc-connector.yaml:/etc/teleport/oidc-connector.yaml:ro
+    - ./teleport/certs:/etc/teleport/certs:ro
+    - teleport_data:/var/lib/teleport
+    - /var/log/teleport-audit:/var/lib/teleport/audit
+    environment:
+    - TZ=${TZ:-Europe/Oslo}
+    - TELEPORT_OIDC_CLIENT_SECRET=${TELEPORT_OIDC_CLIENT_SECRET}
+    # Use image default entrypoint (runs teleport start -c /etc/teleport/teleport.yaml)
+    # NOTE: No HTTP routing labels – Teleport is routed via TCP TLS passthrough in dynamic.yml
+    # This allows Teleport Connect / tsh to use ALPN-based SSH over port 443
+    labels:
+    - traefik.enable=false
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/teleport", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+
+

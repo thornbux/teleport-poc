@@ -1,0 +1,39 @@
+api:
+  dashboard: true
+  debug: true
+
+ping:
+  entryPoint: "traefik"
+
+entryPoints:
+  # Teleport reverse tunnel (SSH nodes connect back via this port)
+  teleport-tunnel:
+    address: ":3024"
+
+log:
+  level: INFO # DEBUG, INFO, WARN, ERROR, FATAL, and PANIC
+  #format: common
+  filePath: /var/log/traefik.log
+
+accessLog:
+  #  format: common
+  # Access Log
+  filePath: /var/log/traefik-access.log
+
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    entryPoint: metrics
+
+# OpenTelemetry Tracing
+# Sends distributed traces to Grafana Tempo for performance analysis
+tracing:
+  otlp:
+    http:
+      endpoint: http://grafana-tempo:4318/v1/traces
+  # Sampling: 1.0 = 100% (use for debugging), 0.1 = 10% (production)
+  sampleRate: 0.1
+  serviceName: traefik
+
